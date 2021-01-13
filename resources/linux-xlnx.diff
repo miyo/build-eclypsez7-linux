@@ -1,0 +1,119 @@
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index b5bd3de87c33..81f0e42d59d7 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -1122,6 +1122,7 @@ dtb-$(CONFIG_ARCH_VT8500) += \
+ 	wm8850-w70v2.dtb
+ dtb-$(CONFIG_ARCH_ZYNQ) += \
+ 	zynq-cc108.dtb \
++	zynq-eclypsez7.dtb \
+ 	zynq-microzed.dtb \
+ 	zynq-parallella.dtb \
+ 	zynq-zc702.dtb \
+diff --git a/arch/arm/boot/dts/zynq-eclypsez7.dts b/arch/arm/boot/dts/zynq-eclypsez7.dts
+new file mode 100644
+index 000000000000..f90b5d8742c6
+--- /dev/null
++++ b/arch/arm/boot/dts/zynq-eclypsez7.dts
+@@ -0,0 +1,72 @@
++// SPDX-License-Identifier: GPL-2.0+
++/dts-v1/;
++#include "zynq-7000.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	model = "Eclypse-Z7";
++	compatible = "xlnx,zynq-7000";
++
++	aliases {
++		ethernet0 = &gem0;
++		serial0 = &uart0;
++	};
++
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x40000000>;
++	};
++
++	chosen {
++		bootargs = "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=1 uio_pdrv_genirq.of_id=generic-uio earlycon";
++		stdout-path = "serial0:115200n8";
++	};
++
++	gpio-leds {
++		compatible = "gpio-leds";
++
++		ld4 {
++			label = "zynq-zybo-z7:green:ld4";
++			gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
++		};
++	};
++
++	usb_phy0: phy0 {
++		#phy-cells = <0>;
++		compatible = "usb-nop-xceiv";
++		reset-gpios = <&gpio0 46 GPIO_ACTIVE_LOW>;
++	};
++};
++
++&clkc {
++	ps-clk-frequency = <33333333>;
++};
++
++&gem0 {
++	status = "okay";
++	phy-mode = "rgmii-id";
++	phy-handle = <&ethernet_phy>;
++
++	ethernet_phy: ethernet-phy@0 {
++		reg = <0>;
++		device_type = "ethernet-phy";
++	};
++};
++
++&sdhci0 {
++	status = "okay";
++};
++
++&uart0 {
++	status = "okay";
++};
++
++&uart1 {
++	status = "disabled";
++};
++
++&usb0 {
++	status = "okay";
++	dr_mode = "host";
++	usb-phy = <&usb_phy0>;
++};
+diff --git a/scripts/package/builddeb b/scripts/package/builddeb
+index 90c9a8ac7adb..1592c368f9f6 100755
+--- a/scripts/package/builddeb
++++ b/scripts/package/builddeb
+@@ -155,7 +155,7 @@ done
+ 
+ # Build kernel header package
+ (cd $srctree; find . -name Makefile\* -o -name Kconfig\* -o -name \*.pl) > "$objtree/debian/hdrsrcfiles"
+-(cd $srctree; find arch/*/include include scripts -type f -o -type l) >> "$objtree/debian/hdrsrcfiles"
++(cd $srctree; find arch/*/include include tools/include scripts -type f -o -type l) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f) >> "$objtree/debian/hdrsrcfiles"
+ if grep -q '^CONFIG_STACK_VALIDATION=y' $KCONFIG_CONFIG ; then
+@@ -172,6 +172,15 @@ mkdir -p "$destdir"
+ (cd $objtree; cp $KCONFIG_CONFIG $destdir/.config) # copy .config manually to be where it's expected to be
+ ln -sf "/usr/src/linux-headers-$version" "$kernel_headers_dir/lib/modules/$version/build"
+ rm -f "$objtree/debian/hdrsrcfiles" "$objtree/debian/hdrobjfiles"
++mkdir -m 755 -p "$kernel_headers_dir/DEBIAN"
++cat <<EOF >> $kernel_headers_dir/DEBIAN/postinst
++#!/bin/sh -e
++
++make -C /usr/src/linux-headers-$version scripts
++
++EOF
++
++chmod 755 $kernel_headers_dir/DEBIAN/postinst
+ 
+ if [ "$ARCH" != "um" ]; then
+ 	create_package "$kernel_headers_packagename" "$kernel_headers_dir"
